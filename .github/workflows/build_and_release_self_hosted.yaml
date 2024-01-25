@@ -1,0 +1,86 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  get-go-version:
+    name: "Determine Go toolchain version"
+    runs-on: self-hosted
+    outputs:
+      go-version: ${{ steps.get-go-version.outputs.go-version }}
+    steps:
+      - name: Determine Go version
+        id: get-go-version
+        run: |
+          echo "Building with Go $(go version | awk '{print $3}' | sed -e 's/^go//')"
+          echo "go-version=$(go version | awk '{print $3}' | sed -e 's/^go//')" >> $GITHUB_OUTPUT
+
+  build-dawrin:
+    needs:
+      - get-go-version
+    runs-on: self-hosted
+    strategy:
+      fail-fast: true
+      matrix:
+        goos: [darwin]
+        goarch: ["arm64"] # , "amd64"]
+  
+    name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
+  
+    steps:
+      - uses: actions/checkout@v4 
+  
+      - name: Build
+        run: |
+          export OS=${{ matrix.goos }}
+          export ARCH=${{ matrix.goarch }}
+          make build
+        shell: bash
+
+
+  build-linux:
+    needs:
+      - get-go-version
+    runs-on: self-hosted
+    strategy:
+      fail-fast: true
+      matrix:
+        goos: [linux]
+        goarch: ["amd64"] # , "arm", "arm64", "386"]
+  
+    name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
+  
+    steps:
+      - uses: actions/checkout@v4 
+  
+      - name: Build
+        run: |
+          export OS=${{ matrix.goos }}
+          export ARCH=${{ matrix.goarch }}
+          make build
+        shell: bash
+
+  build-and-release-docker-default:
+    name: Docker ${{ matrix.goarch }} default release build
+    needs:
+      - build-linux
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        goarch: ["arm64"] # , "amd64"]
+    env:
+      repo: ${{ github.event.repository.name }}
+      PKG_NAME: http_harbour_go
+  
+    steps:
+      - uses: actions/checkout@v4
+  
+      - name: Docker Build and Push
+        run: |
+          export ARCH=${{ matrix.goarch }}        
+          make docker
+        shell: bash
+        
